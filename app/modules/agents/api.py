@@ -12,6 +12,7 @@ from app.modules.agents.schemas import (
 )
 from app.modules.agents.service import AgentsService
 from app.redis.events import publish_to_pc_channel
+from app.db.repositories.commands import CommandsRepo
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -51,10 +52,13 @@ async def command_ack(
 ):
     await svc.handle_command_ack(session, payload)
 
+    cmd = await CommandsRepo().get_by_id(session, payload.command_id)
+
     await publish_to_pc_channel(str(payload.pc_id), {
         "pc_id": str(payload.pc_id),
         "type": "command_update",
         "command_id": str(payload.command_id),
+        "command_type": cmd.type if cmd else None,
         "status": "acknowledged",
         "ts": payload.ts,
     })
@@ -69,12 +73,17 @@ async def command_result(
 ):
     await svc.handle_command_result(session, payload)
 
+    cmd = await CommandsRepo().get_by_id(session, payload.command_id)
+
     await publish_to_pc_channel(str(payload.pc_id), {
         "pc_id": str(payload.pc_id),
         "type": "command_update",
         "command_id": str(payload.command_id),
-        "status": payload.status,              # completed/failed
+        "command_type": cmd.type if cmd else None,
+        "status": payload.status,              
         "exit_code": payload.exit_code,
+        "stdout": payload.stdout,                    
+        "stderr": payload.stderr,
         "finished_at_ts": payload.finished_at_ts,
     })
     
